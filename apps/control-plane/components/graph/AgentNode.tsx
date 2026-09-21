@@ -1,22 +1,26 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { memo } from "react";
 import { StatusBadge } from "@/components/StatusBadge";
-import type { AgentNodeData } from "@/lib/graph";
+import type { GraphNodeData } from "@/lib/graph";
 
-// One node type for every agent/department. A DepartmentNode (a group that expands into a
-// subgraph) is a later-phase concern, once departments become real subgraphs.
-function AgentNodeImpl({ data, selected }: NodeProps<Node<AgentNodeData>>) {
+// Any executable node: an agent inside a department, or a top-level node (head, review, report).
+// Handles are ids the edges refer to: t/b (top/bottom) for handoffs between units, l/r for agents in a department.
+function AgentNodeImpl({ data, selected }: NodeProps<Node<GraphNodeData>>) {
   return (
-    <div className={`node node--${data.status}${selected ? " node--selected" : ""}`}>
-      <Handle type="target" position={Position.Top} isConnectable={false} />
-      <div className="node__kind">{data.kind}</div>
+    <div className={`node node--${data.status} node--${data.kind}${selected ? " node--selected" : ""}`}>
+      <Handle id="t" type="target" position={Position.Top} isConnectable={false} />
+      <Handle id="l" type="target" position={Position.Left} isConnectable={false} />
+      {data.kind !== "agent" && <div className="node__kind">{data.kind}</div>}
       <div className="node__label">{data.label}</div>
-      <div className="node__role">{data.role}</div>
+      <div className="node__role" title={data.role}>
+        {data.role}
+      </div>
       <div className="node__foot">
         <StatusBadge status={data.status} />
         {data.detail && <span className="node__detail">{data.detail}</span>}
       </div>
-      <Handle type="source" position={Position.Bottom} isConnectable={false} />
+      <Handle id="r" type="source" position={Position.Right} isConnectable={false} />
+      <Handle id="b" type="source" position={Position.Bottom} isConnectable={false} />
     </div>
   );
 }

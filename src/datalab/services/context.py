@@ -22,11 +22,12 @@ class RunContext:
     mode: RunMode
     bus: EventBus
     settings: Settings
+    node_id: str | None = None
     department: str | None = None
     agent: str | None = None
 
-    def scoped(self, department: str, agent: str | None) -> RunContext:
-        return replace(self, department=department, agent=agent)
+    def scoped(self, node_id: str, department: str, agent: str | None) -> RunContext:
+        return replace(self, node_id=node_id, department=department, agent=agent)
 
     def emit(
         self,
@@ -40,6 +41,7 @@ class RunContext:
         self.bus.emit(
             self.run_id,
             event_type,
+            node_id=self.node_id,
             department=self.department,
             agent=self.agent,
             status=status,

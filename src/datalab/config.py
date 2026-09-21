@@ -19,7 +19,7 @@ class Settings(BaseModel):
     ollama_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3:8b"
     handoff_delay: float = 0.6  # seconds a handoff stays "active" so it is visible in the UI
-    demo_delay: float = 0.8  # seconds per step of the demo workflow
+    demo_delay: float = 0.5  # seconds per step of the demo workflow (12 agents run in a demo)
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 

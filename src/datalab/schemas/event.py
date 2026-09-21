@@ -31,14 +31,29 @@ TERMINAL_EVENTS = frozenset({EventType.run_completed, EventType.run_rejected, Ev
 
 
 class ExecutionEvent(BaseModel):
+    """Identifiers (all machine ids, never display labels; stable and independent of execution order):
+
+    - `node_id`: the graph node this event is about; the key the control plane indexes state by.
+      Top-level nodes use their own id (`head_ds`, `review`, `report`), a department container uses the
+      department id (`data_engineering`) and an agent inside a department is `<department>.<agent>`
+      (`data_engineering.data_profiler`). `None` for run-level events.
+    - `department`: the top-level unit the node belongs to: the department id for a container and for its
+      agents, the node's own id for top-level nodes. `None` for run-level events.
+    - `agent`: the agent's local id (`data_profiler`); `None` for department containers and run-level events.
+    - `target`: for handoffs, the `node_id` of the executable node that receives control
+      (`node_id` is then the node handing over).
+    - `status`: status of `node_id` (or of the run, for run events) after this event.
+    """
+
     seq: int  # 1-based, per run; also the SSE id
     event_id: str
     run_id: str
     timestamp: datetime
     event_type: EventType
-    department: str | None = None  # graph node id; None for run-level events
+    node_id: str | None = None
+    department: str | None = None
     agent: str | None = None
-    status: Status | None = None  # status of `department` (or of the run) after this event
-    target: str | None = None  # destination node of a handoff
+    status: Status | None = None
+    target: str | None = None
     message: str = ""
     data: dict[str, Any] = {}

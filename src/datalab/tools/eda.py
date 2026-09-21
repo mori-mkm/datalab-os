@@ -1,4 +1,4 @@
-"""Basic exploratory analysis (Analytics capability)."""
+"""Exploratory analysis (EDA analyst) and data-derived hypotheses (hypothesis analyst)."""
 
 from __future__ import annotations
 
@@ -11,11 +11,14 @@ from datalab.tools.profiling import binary_target
 TOP_K = 5
 
 
-def run_eda(df: pd.DataFrame, target: str, positive_label: Any = None, exclude: list[str] = []) -> dict[str, Any]:
+def summarize_features(
+    df: pd.DataFrame, target: str, positive_label: Any = None, features: list[str] | None = None
+) -> dict[str, Any]:
+    """Numeric/categorical summaries, correlations and the target rate. `features` defaults to all non-target columns."""
     y, positive = binary_target(df, target, positive_label)
-    features = df.drop(columns=[target, *[c for c in exclude if c in df.columns]])
-    numeric = features.select_dtypes(include="number")
-    categorical = features.select_dtypes(exclude="number")
+    X = df[features] if features is not None else df.drop(columns=[target])
+    numeric = X.select_dtypes(include="number")
+    categorical = X.select_dtypes(exclude="number")
 
     numeric_summary = {
         col: {
@@ -40,10 +43,7 @@ def run_eda(df: pd.DataFrame, target: str, positive_label: Any = None, exclude: 
             ],
         }
 
-    with_target = [
-        {"feature": col, "pearson_r": float(r)}
-        for col, r in numeric.corrwith(y).dropna().items()
-    ]
+    with_target = [{"feature": col, "pearson_r": float(r)} for col, r in numeric.corrwith(y).dropna().items()]
     with_target.sort(key=lambda d: abs(d["pearson_r"]), reverse=True)
 
     pairs: list[dict[str, Any]] = []
@@ -55,17 +55,19 @@ def run_eda(df: pd.DataFrame, target: str, positive_label: Any = None, exclude: 
                 pairs.append({"a": a, "b": b, "pearson_r": float(corr.loc[a, b])})
     pairs.sort(key=lambda d: abs(d["pearson_r"]), reverse=True)
 
-    hypotheses = [
-        f"'{d['feature']}' is linearly associated with the target (r={d['pearson_r']:+.2f}); candidate predictor."
-        for d in with_target[:3]
-        if abs(d["pearson_r"]) >= 0.1
-    ] or ["No numeric feature has |r| >= 0.1 with the target; expect a weak linear baseline."]
-
     return {
         "target_rate": float(y.mean()),
         "positive_label": positive,
         "numeric_summary": numeric_summary,
         "categorical_summary": categorical_summary,
         "correlations": {"with_target": with_target, "top_feature_pairs": pairs[:TOP_K]},
-        "hypotheses": hypotheses,
     }
+
+
+def derive_hypotheses(eda: dict[str, Any]) -> list[str]:
+    """Correlational statements from the EDA. Association only: no causal claim."""
+    return [
+        f"'{d['feature']}' is linearly associated with the target (r={d['pearson_r']:+.2f}); candidate predictor."
+        for d in eda["correlations"]["with_target"][:3]
+        if abs(d["pearson_r"]) >= 0.1
+    ] or ["No numeric feature has |r| >= 0.1 with the target; expect a weak linear baseline."]

@@ -1,4 +1,5 @@
-import { formatDuration, formatTime, upstreamOf, type RunView } from "@/lib/events";
+import { formatDuration, formatTime, type RunView } from "@/lib/events";
+import { departmentSummary, inputsFor, isContainer, labelPath } from "@/lib/hierarchy";
 import type { GraphMeta } from "@/lib/types";
 import { StatusBadge } from "./StatusBadge";
 
@@ -7,18 +8,25 @@ interface Props {
   meta: GraphMeta;
   view: RunView;
   now: number;
+  onSelect: (id: string) => void;
   onClose: () => void;
 }
 
 const list = (items: string[]) => (items.length ? items.join(", ") : "—");
 
-// Every value comes from the run's events; nothing here is computed or invented client-side.
-export function AgentDetails({ nodeId, meta, view, now, onClose }: Props) {
+// Every value comes from the run's events and the backend graph; nothing here is computed or invented client-side.
+export function AgentDetails({ nodeId, meta, view, now, onSelect, onClose }: Props) {
   const spec = meta.nodes.find((n) => n.id === nodeId);
   const node = view.nodes[nodeId];
   if (!spec || !node) return null;
-  const inputs = upstreamOf(nodeId, meta).flatMap((id) => view.nodes[id]?.artifacts ?? []);
-  const recent = node.recent.filter((e) => e.event_type !== "handoff_completed");
+  const department = isContainer(spec) ? departmentSummary(meta, view, nodeId) : null;
+  const task = department
+    ? department.activeAgent
+      ? `${labelPath(meta, department.activeAgent)}: ${view.nodes[department.activeAgent]?.task ?? "—"}`
+      : null
+    : node.task;
+  const artifacts = department ? department.artifacts : node.artifacts;
+  const recent = (department ? department.recent : node.recent).filter((e) => e.event_type !== "handoff_completed");
   const duration = node.startedAt ? formatDuration(node.startedAt, node.endedAt ?? now) : "—";
 
   return (
@@ -27,8 +35,10 @@ export function AgentDetails({ nodeId, meta, view, now, onClose }: Props) {
         <div>
           <div className="details__title">{spec.label}</div>
           <div className="muted">
-            {spec.role} · agent: {spec.agent}
+            {spec.role}
+            {spec.agent ? ` · agent: ${spec.agent}` : ` · ${spec.type}`}
           </div>
+          {spec.parent_id && <div className="muted">in {labelPath(meta, spec.parent_id)}</div>}
         </div>
         <button className="ghost" onClick={onClose} aria-label="Close details">
           ✕
@@ -39,12 +49,29 @@ export function AgentDetails({ nodeId, meta, view, now, onClose }: Props) {
         <dd>
           <StatusBadge status={node.status} />
         </dd>
+        {department && (
+          <>
+            <dt>Agents</dt>
+            <dd>
+              <ul className="details__agents">
+                {department.agents.map((a) => (
+                  <li key={a.id}>
+                    <button className="ghost details__link" onClick={() => onSelect(a.id)}>
+                      {a.label}
+                    </button>
+                    <StatusBadge status={a.status} />
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </>
+        )}
         <dt>Current task</dt>
-        <dd>{node.task ?? "—"}</dd>
+        <dd>{task ?? "—"}</dd>
         <dt>Input</dt>
-        <dd>{list(inputs)}</dd>
+        <dd>{list(inputsFor(meta, view, nodeId))}</dd>
         <dt>Artifacts</dt>
-        <dd>{list(node.artifacts)}</dd>
+        <dd>{list(artifacts)}</dd>
         <dt>Started</dt>
         <dd>{formatTime(node.startedAt)}</dd>
         <dt>Duration</dt>
@@ -55,7 +82,11 @@ export function AgentDetails({ nodeId, meta, view, now, onClose }: Props) {
             <ul>
               {[...recent].reverse().map((e) => (
                 <li key={e.seq}>
-                  <span className="muted">{formatTime(e.timestamp)}</span> {e.message}
+                  <span className="muted">{formatTime(e.timestamp)}</span>
+                  {department && e.node_id && e.event_type !== "handoff_started"
+                    ? ` ${meta.nodes.find((n) => n.id === e.node_id)?.label}: `
+                    : " "}
+                  {e.message}
                 </li>
               ))}
             </ul>

@@ -1,7 +1,8 @@
-"""Demo workflow: every node sleeps briefly and writes a small, clearly-labelled artifact.
+"""Demo workflow: every executable node runs (the SAME topology as a real run), but only sleeps briefly and
+writes a small, clearly-labelled placeholder.
 
-It exists to validate the orchestration and the control plane. It analyses no data and produces no
-scientific result; artifacts are named `*.demo.json` so they cannot be mistaken for real ones.
+It exists to validate the orchestration and the control plane. It analyses no data and produces no scientific
+result; artifacts are named `*.demo.json` so they cannot be mistaken for real ones.
 """
 
 from __future__ import annotations
@@ -16,17 +17,24 @@ It only validates the orchestration (LangGraph), the event stream and the contro
 """
 
 
-def run(ctx: RunContext, state: DataLabState) -> dict:
+def _simulate(ctx: RunContext) -> None:
     delay = ctx.settings.demo_delay
     ctx.status("[demo] step 1/2: simulating work (no data is analysed)")
     ctx.pause(delay)
     ctx.status("[demo] step 2/2: writing demo artifact")
     ctx.pause(delay / 2)
-    if ctx.department == "report":
-        name = ctx.save_text("report.md", REPORT_TEXT)
-        return {"status": "completed", "artifacts": {name: name}}
+
+
+def run(ctx: RunContext, state: DataLabState) -> dict:
+    _simulate(ctx)
     name = ctx.save_json(
-        f"{ctx.department}.demo.json",
-        {"mode": "demo", "department": ctx.department, "note": "placeholder produced by the demo workflow"},
+        f"{ctx.agent}.demo.json",
+        {"mode": "demo", "node_id": ctx.node_id, "note": "placeholder produced by the demo workflow"},
     )
     return {"artifacts": {name: name}}
+
+
+def run_report(ctx: RunContext, state: DataLabState) -> dict:
+    _simulate(ctx)
+    name = ctx.save_text("report.md", REPORT_TEXT)
+    return {"status": "completed", "artifacts": {name: name}}

@@ -9,7 +9,7 @@ from datalab.schemas.problem import ProblemConfig
 from datalab.schemas.run import RunMode, Status
 
 
-def _merge(a: dict[str, str], b: dict[str, str]) -> dict[str, str]:
+def _merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     return {**a, **b}
 
 
@@ -26,6 +26,8 @@ class DataLabState(TypedDict, total=False):
     brief: str  # head_ds plan text
     brief_source: str  # "ollama:<model>" or "deterministic"
 
+    plans: Annotated[dict[str, dict[str, Any]], _merge]  # department id -> its lead's work plan (small dict)
+
     dataset_profile: dict[str, Any]
     data_quality: dict[str, Any]
 
@@ -33,6 +35,7 @@ class DataLabState(TypedDict, total=False):
     hypotheses: list[str]
 
     experiments: list[dict[str, Any]]
+    model_evaluation: dict[str, Any]
     selected_model: str | None
 
     review: dict[str, Any]
@@ -52,11 +55,13 @@ def new_state(run_id: str, problem: ProblemConfig, dataset_path: str, mode: RunM
         status="waiting",
         brief="",
         brief_source="",
+        plans={},
         dataset_profile={},
         data_quality={},
         eda={},
         hypotheses=[],
         experiments=[],
+        model_evaluation={},
         selected_model=None,
         review={},
         artifacts={},

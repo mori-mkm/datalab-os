@@ -102,7 +102,14 @@ export default function ControlPlane() {
           )}
         </div>
         {meta && selected && (
-          <AgentDetails nodeId={selected} meta={meta} view={view} now={now} onClose={() => setSelected(null)} />
+          <AgentDetails
+            nodeId={selected}
+            meta={meta}
+            view={view}
+            now={now}
+            onSelect={setSelected}
+            onClose={() => setSelected(null)}
+          />
         )}
       </main>
       {meta && <ActivityFeed events={view.events} meta={meta} />}

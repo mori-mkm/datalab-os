@@ -18,7 +18,7 @@ from datalab.services.run_service import RunService
 
 
 def _print(event: ExecutionEvent) -> None:
-    where = f" [{event.department}]" if event.department else ""
+    where = f" [{event.node_id}]" if event.node_id else ""
     print(f"{event.timestamp.astimezone():%H:%M:%S} {event.event_type.value:<18}{where} {event.message}", flush=True)
 
 
