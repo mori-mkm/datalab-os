@@ -21,3 +21,8 @@ node_modules/
 .next/
 apps/control-plane/next-env.d.ts
 *.tsbuildinfo
+
+# Claude Code: agent definitions (.claude/agents) are versioned; local/ephemeral state is not
+.claude/handoffs/
+.claude/worktrees/
+.claude/settings.local.json

@@ -242,6 +242,12 @@ The bundled datasets in `data/raw/` are synthetic (`python -m datalab.tools.samp
 
 **Future: strong version**: Red Team · Phoenix observability · model benchmark and routing · agent evals · retry · pause/resume · run replay · task graph · persistent memory · MCP · Graphify · worktrees · Loop Engineering concepts · advanced orchestration.
 
+## Development workflow
+
+This repo is built with a small team of *development* agents (`.claude/agents/`), distinct from the runtime
+DataLab agents. See [`docs/agents/TEAM_ORCHESTRATION.md`](docs/agents/TEAM_ORCHESTRATION.md): one task, one owner,
+bounded handoffs, independent evaluation and review; Git history stays with the maintainer.
+
 ## Layout
 
 ```text
