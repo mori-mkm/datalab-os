@@ -6,8 +6,8 @@ from typing import Any
 
 from datalab.schemas.problem import ProblemConfig
 from datalab.schemas.review import ReviewCheck, ReviewResult
+from datalab.tools.baseline import METRICS
 
-METRICS = ("accuracy", "precision", "recall", "f1", "roc_auc")
 LEAKAGE_CORR = 0.95  # |pearson r| between a used numeric feature and the target
 SUSPICIOUS_AUC = 0.999
 

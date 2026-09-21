@@ -29,10 +29,15 @@ def test_health(client):
     assert body["status"] == "ok" and body["llm"]["available"] is False  # llm_mode=off in tests
 
 
-def test_graph_endpoint(client):
+def test_graph_endpoint_serves_the_hierarchy(client):
     body = client.get("/api/graph").json()
+    by_id = {n["id"]: n for n in body["nodes"]}
     assert [n["id"] for n in body["nodes"]][0] == "head_ds"
-    assert {"id": "modeling->review", "source": "modeling", "target": "review"} in body["edges"]
+    assert by_id["data_engineering"]["type"] == "department" and by_id["data_engineering"]["parent_id"] is None
+    assert by_id["data_engineering.data_profiler"]["parent_id"] == "data_engineering"
+    assert {"id": "modeling.model_evaluator->review", "source": "modeling.model_evaluator", "target": "review", "kind": "handoff"} in body["edges"]
+    assert {"id": "analytics.analytics_lead->analytics.eda_analyst", "source": "analytics.analytics_lead", "target": "analytics.eda_analyst", "kind": "internal"} in body["edges"]
+    assert body == client.get("/api/graph").json()  # deterministic payload
 
 
 def test_create_run_get_run_and_events(client):
@@ -69,7 +74,8 @@ def test_sse_stream_delivers_all_events_and_closes(client):
         events = _sse_events(response.iter_lines())  # returns only because the stream closes after the terminal event
     assert events[0]["event_type"] == "run_started" and events[-1]["event_type"] == "run_completed"
     assert [e["seq"] for e in events] == list(range(1, len(events) + 1))
-    assert [e["department"] for e in events if e["event_type"] == "agent_started"][-1] == "report"
+    assert [e["node_id"] for e in events if e["event_type"] == "agent_started"][-1] == "report"
+    assert "data_engineering.data_profiler" in [e["node_id"] for e in events]
 
 
 def test_sse_resumes_after_last_event_id(client):

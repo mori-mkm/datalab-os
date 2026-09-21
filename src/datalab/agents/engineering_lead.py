@@ -1,4 +1,7 @@
-"""Data Engineering lead: profiles the dataset and assesses basic data quality."""
+"""Engineering Lead: validates the department's prerequisites and records the plan its agents work from.
+
+It reads only the CSV header; the profiling itself belongs to the Data Profiler.
+"""
 
 from __future__ import annotations
 
@@ -7,18 +10,16 @@ from pathlib import Path
 from datalab.schemas.problem import ProblemConfig
 from datalab.services.context import RunContext
 from datalab.state import DataLabState
-from datalab.tools.profiling import load_dataset, profile_dataset
+from datalab.tools.profiling import read_columns
 
 
 def run(ctx: RunContext, state: DataLabState) -> dict:
     problem = ProblemConfig(**state["problem"])
-    ctx.status("Loading dataset")
-    df = load_dataset(Path(state["dataset_path"]))
-    ctx.status(f"Profiling {len(df)} rows x {df.shape[1]} columns")
-    result = profile_dataset(df, problem.target, problem.positive_label)
-    name = ctx.save_json("data_profile.json", result)
-    return {
-        "dataset_profile": result["profile"],
-        "data_quality": result["quality"],
-        "artifacts": {name: name},
-    }
+    ctx.status("Validating prerequisites: dataset schema")
+    columns = read_columns(Path(state["dataset_path"]))
+    declared = {problem.target, *problem.id_columns, *problem.leakage_columns}
+    missing = sorted(declared - set(columns))
+    if missing:
+        raise ValueError(f"columns declared in the problem are not in the dataset: {missing}")
+    ctx.status(f"Delegating profiling and quality assessment ({len(columns)} columns)")
+    return {"plans": {"data_engineering": {"columns": columns}}}

@@ -40,6 +40,9 @@ def build_report(state: DataLabState, summary: str, summary_source: str) -> str:
         "|---|---|",
         *[f"| {k} | {_fmt(v)} |" for k, v in exp["metrics"].items()],
         "",
+        f"- Selected model: `{state['selected_model']}`; majority-class accuracy {_fmt(state['model_evaluation']['majority_class_accuracy'])}, "
+        f"accuracy lift {_fmt(state['model_evaluation']['accuracy_lift_vs_majority'])} (descriptive; the verdict is the review's)",
+        "",
         "## Review",
         *[f"- {'PASS' if c['passed'] else 'FAIL'} `{c['name']}`: {c['detail']}" for c in state["review"]["checks"]],
         "",

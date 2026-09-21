@@ -1,25 +1,25 @@
 import { useEffect, useRef } from "react";
 import { formatTime } from "@/lib/events";
+import { labelPath } from "@/lib/hierarchy";
 import type { ExecutionEvent, GraphMeta } from "@/lib/types";
 
-function describe(event: ExecutionEvent, labels: Record<string, string>): string {
-  const name = (id: string | null) => (id ? (labels[id] ?? id) : "");
+function describe(event: ExecutionEvent, meta: GraphMeta): string {
+  const name = labelPath(meta, event.node_id);
   switch (event.event_type) {
     case "handoff_started":
-      return `Handoff: ${name(event.department)} → ${name(event.target)}`;
+      return `Handoff: ${labelPath(meta, event.node_id)} → ${labelPath(meta, event.target)}`;
     case "agent_started":
-      return `${name(event.department)} started`;
+      return `${name} started`;
     case "agent_completed":
-      return `${name(event.department)} ${event.status ?? "completed"}`;
+      return `${name} ${event.status ?? "completed"}`;
     case "agent_failed":
-      return `${name(event.department)} failed: ${event.message}`;
+      return `${name} failed: ${event.message}`;
     default:
-      return event.department ? `${name(event.department)}: ${event.message}` : event.message;
+      return event.node_id ? `${name}: ${event.message}` : event.message;
   }
 }
 
 export function ActivityFeed({ events, meta }: { events: ExecutionEvent[]; meta: GraphMeta }) {
-  const labels = Object.fromEntries(meta.nodes.map((n) => [n.id, n.label]));
   const shown = events.filter((e) => e.event_type !== "handoff_completed"); // the started line already says it
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -35,7 +35,7 @@ export function ActivityFeed({ events, meta }: { events: ExecutionEvent[]; meta:
           <div key={e.seq} className={`feed__row feed__row--${e.event_type}`}>
             <span className="muted">{formatTime(e.timestamp)}</span>
             <span className="feed__type">{e.event_type}</span>
-            <span>{describe(e, labels)}</span>
+            <span>{describe(e, meta)}</span>
           </div>
         ))}
         <div ref={end} />

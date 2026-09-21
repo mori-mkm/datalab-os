@@ -1,5 +1,6 @@
 // Pure reducer: execution events -> what the control plane shows. No I/O, no business logic:
-// the backend (LangGraph) decides every status, this only folds the event stream.
+// the backend (LangGraph) decides every status, including department lifecycle, this only folds the
+// event stream. State is indexed by the graph node id (`event.node_id`), never by display labels.
 import type { ExecutionEvent, GraphMeta, RunMode, Status } from "./types";
 
 export type EdgeState = "idle" | "active" | "done";
@@ -20,6 +21,7 @@ export interface RunView {
   startedAt: string | null;
   endedAt: string | null;
   nodes: Record<string, NodeView>;
+  /** Keyed by edge id `<source node id>-><target node id>`. */
   edges: Record<string, EdgeState>;
   events: ExecutionEvent[];
   lastSeq: number;
@@ -37,6 +39,8 @@ const blankNode = (): NodeView => ({
   artifacts: [],
   recent: [],
 });
+
+export const edgeKey = (source: string, target: string): string => `${source}->${target}`;
 
 export function initialView(meta: GraphMeta | null, runId: string | null = null, mode: RunMode | null = null): RunView {
   return {
@@ -65,15 +69,15 @@ export function applyEvent(view: RunView, event: ExecutionEvent): RunView {
     next.endedAt = event.timestamp;
   }
 
-  const department = event.department;
-  if (!department) return next;
+  const nodeId = event.node_id;
+  if (!nodeId) return next;
 
   if (HANDOFFS.has(event.event_type) && event.target) {
     const state: EdgeState = event.event_type === "handoff_started" ? "active" : "done";
-    next.edges = { ...view.edges, [`${department}->${event.target}`]: state };
+    next.edges = { ...view.edges, [edgeKey(nodeId, event.target)]: state };
   }
 
-  const node: NodeView = { ...(view.nodes[department] ?? blankNode()) };
+  const node: NodeView = { ...(view.nodes[nodeId] ?? blankNode()) };
   if (!HANDOFFS.has(event.event_type) && event.status) node.status = event.status;
   switch (event.event_type) {
     case "agent_started":
@@ -95,23 +99,8 @@ export function applyEvent(view: RunView, event: ExecutionEvent): RunView {
     }
   }
   node.recent = [...node.recent, event].slice(-RECENT_LIMIT);
-  next.nodes = { ...view.nodes, [department]: node };
+  next.nodes = { ...view.nodes, [nodeId]: node };
   return next;
-}
-
-export function upstreamOf(nodeId: string, meta: GraphMeta): string[] {
-  const seen: string[] = [];
-  const queue = [nodeId];
-  while (queue.length) {
-    const current = queue.shift()!;
-    for (const edge of meta.edges) {
-      if (edge.target === current && !seen.includes(edge.source)) {
-        seen.push(edge.source);
-        queue.push(edge.source);
-      }
-    }
-  }
-  return seen;
 }
 
 export function formatDuration(from: string | null, to: string | number | null): string {

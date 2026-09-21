@@ -17,20 +17,27 @@ from datalab.schemas.problem import ProblemConfig
 from datalab.tools.profiling import binary_target
 
 BASELINE_ID = "baseline_logreg"
+METRICS = ("accuracy", "precision", "recall", "f1", "roc_auc")
 
 
-def train_baseline(df: pd.DataFrame, problem: ProblemConfig) -> dict[str, Any]:
-    y_all, positive = binary_target(df, problem.target, problem.positive_label)
-    df = df[y_all.notna()]
-    y = y_all[y_all.notna()].astype(int)
-
+def select_features(columns: list[str], problem: ProblemConfig) -> tuple[list[str], dict[str, Any]]:
+    """Model features = columns minus the target, id columns and declared leakage. Also returns what was dropped."""
     dropped = {
         "target": problem.target,
         "id_columns": problem.id_columns,
         "declared_leakage": problem.leakage_columns,
     }
     drop = {problem.target, *problem.id_columns, *problem.leakage_columns}
-    X = df[[c for c in df.columns if c not in drop]]
+    return [c for c in columns if c not in drop], dropped
+
+
+def train_baseline(df: pd.DataFrame, problem: ProblemConfig, features: list[str] | None = None) -> dict[str, Any]:
+    y_all, positive = binary_target(df, problem.target, problem.positive_label)
+    df = df[y_all.notna()]
+    y = y_all[y_all.notna()].astype(int)
+
+    default_features, dropped = select_features(list(df.columns), problem)
+    X = df[features if features is not None else default_features]
     numeric = list(X.select_dtypes(include="number").columns)
     categorical = [c for c in X.columns if c not in numeric]
 
@@ -87,4 +94,4 @@ def train_baseline(df: pd.DataFrame, problem: ProblemConfig) -> dict[str, Any]:
             "roc_auc": roc_auc_score(y_test, proba),
         },
     }
-    return {"experiments": [experiment], "selected_model": BASELINE_ID}
+    return {"experiments": [experiment]}
