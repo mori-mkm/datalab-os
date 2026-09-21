@@ -1,0 +1,11 @@
+# Same problem, but the dataset hides an undeclared copy of the target
+# (account_closed_flag). The review node is expected to REJECT this run.
+project_name: churn-sample-leaky
+business_problem: Predict which customers will churn (dataset contains an undeclared leak).
+dataset_path: data/raw/sample_churn_leaky.csv
+target: churned
+task_type: tabular_binary_classification
+id_columns: [customer_id]
+leakage_columns: []
+test_size: 0.25
+seed: 42

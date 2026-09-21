@@ -1,0 +1,9 @@
+project_name: churn-sample
+business_problem: Predict which customers will churn so retention can prioritise them.
+dataset_path: data/raw/sample_churn.csv
+target: churned
+task_type: tabular_binary_classification
+id_columns: [customer_id]
+leakage_columns: []
+test_size: 0.25
+seed: 42
