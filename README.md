@@ -23,9 +23,6 @@ independent methodological review — with every decision, tool call, and handof
 
 ![DataLab OS demo](docs/assets/demo.gif)
 
-*(placeholder — recorded from a real run; see [docs/DEMO.md](docs/DEMO.md) for the script and
-[docs/assets/README.md](docs/assets/README.md) for capture instructions)*
-
 ---
 
 ## 1. What this project demonstrates
