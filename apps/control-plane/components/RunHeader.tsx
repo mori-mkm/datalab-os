@@ -1,5 +1,7 @@
 import { formatDuration, type RunView } from "@/lib/events";
 import type { Health } from "@/lib/types";
+import type { RunInfo } from "@/lib/types";
+import { RunHistory } from "./RunHistory";
 import { StatusBadge } from "./StatusBadge";
 
 interface Props {
@@ -8,10 +10,12 @@ interface Props {
   health: Health | null;
   backendError: string | null;
   busy: boolean;
+  runs: RunInfo[] | null;
   onStart: (mode: "demo" | "real", config?: string) => void;
+  onOpen: (runId: string) => void;
 }
 
-export function RunHeader({ view, now, health, backendError, busy, onStart }: Props) {
+export function RunHeader({ view, now, health, backendError, busy, runs, onStart, onOpen }: Props) {
   const llm = health?.llm.available
     ? `Ollama · ${health.llm.model}`
     : health
@@ -30,6 +34,7 @@ export function RunHeader({ view, now, health, backendError, busy, onStart }: Pr
         {view.startedAt && <span className="muted">{formatDuration(view.startedAt, view.endedAt ?? now)}</span>}
         <StatusBadge status={view.status} />
       </div>
+      <RunHistory runs={runs} currentId={view.runId} onOpen={onOpen} />
       <div className="header__actions">
         <button disabled={busy || !health} onClick={() => onStart("demo")}>
           Run demo

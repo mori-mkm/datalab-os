@@ -38,6 +38,7 @@ def load_settings() -> Settings:
     env = os.environ.get
     fields: dict[str, object] = {}
     for key, name, cast in [
+        ("workspace_dir", "DATALAB_WORKSPACE", Path),
         ("llm_mode", "DATALAB_LLM", str),
         ("ollama_url", "DATALAB_OLLAMA_URL", str),
         ("ollama_model", "DATALAB_OLLAMA_MODEL", str),

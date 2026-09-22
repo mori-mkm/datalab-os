@@ -216,13 +216,18 @@ The bundled datasets in `data/raw/` are synthetic (`python -m datalab.tools.samp
 | `GET /health` | status and whether the local LLM is available |
 | `GET /api/graph` | the organization read back from the compiled LangGraph: `nodes` (`id, label, role, type, agent, parent_id`; type is `orchestrator \| department \| agent \| review \| report`) and `edges` (`id, source, target, kind`; kind is `internal` inside a department, `handoff` between units) |
 | `POST /api/runs` | `{"mode": "demo" \| "real", "config": "problem.example"}` → 202 + run info |
-| `GET /api/runs/{id}` | run info (status, artifacts, review verdict) |
-| `GET /api/runs/{id}/events` | all events so far |
-| `GET /api/runs/{id}/stream` | Server-Sent Events: replay + live, closes after the terminal event; honours `Last-Event-ID` |
+| `GET /api/runs?limit=50` | run history, newest first (`limit` 1..200); read from `workspace/<run_id>/run.json`, so it survives an API restart |
+| `GET /api/runs/{id}` | run info (status, artifacts, review verdict, dataset name for real runs) |
+| `GET /api/runs/{id}/events` | all events (from memory for a live run, from `events.jsonl` otherwise) |
+| `GET /api/runs/{id}/stream` | Server-Sent Events: replay + live, closes after the terminal event; honours `Last-Event-ID`. A run persisted by an earlier process is replayed from disk, then closed |
+
+Each run is stored as plain files in `workspace/<run_id>/`: `run.json` (summary, atomic writes) and `events.jsonl` (the ordered event log). `DATALAB_WORKSPACE` moves that directory. A run whose server stopped before its terminal event is reported as `error` ("interrupted") with synthetic `agent_failed`/`run_failed` events at read time; nothing is written back.
+
+A terminal summary whose log lost its terminal event is replayed with a deterministic synthetic terminal event (`data.recovered = true`), without changing files or inventing lost agent results. Readers skip malformed, foreign-run, duplicate and out-of-order events; retained sequence numbers are not renumbered. See [run-history recovery rules](docs/run-history.md).
 
 ## Current limitations
 
-- Runs and events live in memory (artifacts are on disk): restarting the API forgets run history.
+- Run history is plain files, single-process: listing scans run directories and reads summaries until `limit` readable runs are found; nonterminal summaries also require reading their event logs. There is no index, retention or deletion, and interrupted runs cannot be resumed.
 - Departments are real subgraphs, but each is a fixed, linear, sequential chain of agents: no parallel branches, no dynamic agent spawning, no delegation decided at run time. The leads only validate and plan.
 - Agents share data through small JSON state and files, not in memory: the CSV is re-read by the profiler, the EDA analyst and the modeler (the quality analyst, hypothesis analyst and evaluator work from state).
 - The topology helpers assume each department is a linear chain; a department with parallel entry/exit agents would need its lifecycle rule (first started / last completed) revisited.

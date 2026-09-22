@@ -131,6 +131,16 @@ button.ghost {
   color: var(--rejected);
   font-size: 13px;
 }
+.history {
+  font: inherit;
+  font-size: 12px;
+  max-width: 320px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 8px;
+}
 .chip {
   font-size: 11px;
   letter-spacing: 0.04em;

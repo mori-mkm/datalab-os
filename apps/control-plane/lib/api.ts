@@ -11,6 +11,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const getGraph = () => request<GraphMeta>("/api/graph");
 export const getHealth = () => request<Health>("/health");
 export const getRun = (runId: string) => request<RunInfo>(`/api/runs/${runId}`);
+export const listRuns = (limit = 50) => request<RunInfo[]>(`/api/runs?limit=${limit}`);
 export const createRun = (mode: RunMode, config?: string) =>
   request<RunInfo>("/api/runs", {
     method: "POST",

@@ -67,6 +67,13 @@ export interface RunInfo {
   mode: RunMode;
   project_name: string;
   status: Status;
+  // Persisted-run fields (schemas/run.py). Optional: absent on older payloads.
+  created_at?: string | null;
+  finished_at?: string | null;
+  error?: string | null;
+  /** File name of the dataset for real runs; null in demo. */
+  dataset?: string | null;
+  review_verdict?: string | null;
 }
 
 export interface Health {

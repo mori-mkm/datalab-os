@@ -1,4 +1,5 @@
 import json
+import asyncio
 import time
 
 import pytest
@@ -85,3 +86,117 @@ def test_sse_resumes_after_last_event_id(client):
     with client.stream("GET", f"/api/runs/{run_id}/stream", headers={"Last-Event-ID": str(total - 2)}) as response:
         events = _sse_events(response.iter_lines())
     assert [e["seq"] for e in events] == [total - 1, total]
+
+
+def _wait_disk_terminal(settings, run_id):
+    path = settings.workspace_dir / run_id / "run.json"
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        info = json.loads(path.read_text("utf-8"))
+        if info["status"] in ("completed", "rejected", "error"):
+            return
+        time.sleep(0.01)
+    pytest.fail("terminal summary was not persisted")
+
+
+def test_restart_reconstructs_demo_real_and_rejected_through_all_endpoints(settings):
+    saved = {}
+    with TestClient(create_app(settings)) as first:
+        for mode, config, expected in [
+            ("demo", "problem.example", "completed"),
+            ("real", "problem.example", "completed"),
+            ("real", "problem.leaky", "rejected"),
+        ]:
+            response = first.post("/api/runs", json={"mode": mode, "config": config})
+            assert response.status_code == 202
+            rid = response.json()["run_id"]
+            _wait_disk_terminal(settings, rid)
+            info = first.get(f"/api/runs/{rid}").json()
+            events = first.get(f"/api/runs/{rid}/events").json()
+            assert info["status"] == expected
+            assert _sse_events(first.get(f"/api/runs/{rid}/stream").text.splitlines()) == events
+            saved[rid] = (info, events)
+    del first  # new app has no memory from app A
+    with TestClient(create_app(settings)) as second:
+        assert second.app.state.runs._runs == {}
+        listed = second.get("/api/runs").json()
+        assert [r["run_id"] for r in listed] == sorted(saved, reverse=True)
+        assert second.get("/api/runs?limit=1").json() == listed[:1]
+        for rid, (info, events) in saved.items():
+            assert second.get(f"/api/runs/{rid}").json() == info
+            assert second.get(f"/api/runs/{rid}/events").json() == events
+            for after in [0, events[-1]["seq"] - 2, events[-1]["seq"], events[-1]["seq"] + 100]:
+                response = second.get(f"/api/runs/{rid}/stream", headers={"Last-Event-ID": str(after)})
+                assert response.status_code == 200
+                assert _sse_events(response.text.splitlines()) == [e for e in events if e["seq"] > after]
+        assert second.app.state.runs._runs == {}
+
+
+@pytest.mark.parametrize("limit", ["0", "201", "invalid"])
+def test_history_limit_validation(client, limit):
+    assert client.get(f"/api/runs?limit={limit}").status_code == 422
+
+
+def test_restart_interrupted_and_missing_terminal_replay(settings, partial_run):
+    from datalab.services.run_store import RunStore
+    from datalab.schemas.run import RunInfo
+    from datetime import datetime, timezone
+    rid = "run_20260101_000001_abcd"
+    RunStore(settings.workspace_dir).save_info(RunInfo(
+        run_id=rid, mode="demo", project_name="p", status="completed", created_at=datetime.now(timezone.utc),
+    ))
+    before = {str(p): p.read_bytes() for p in settings.workspace_dir.rglob("*") if p.is_file()}
+    with TestClient(create_app(settings)) as restarted:
+        for run_id, expected in [(partial_run, "error"), (rid, "completed")]:
+            assert restarted.get(f"/api/runs/{run_id}").json()["status"] == expected
+            events = restarted.get(f"/api/runs/{run_id}/events").json()
+            assert events[-1]["status"] == expected
+            assert _sse_events(restarted.get(f"/api/runs/{run_id}/stream").text.splitlines()) == events
+            assert restarted.get(f"/api/runs/{run_id}/events").json() == events
+    assert before == {str(p): p.read_bytes() for p in settings.workspace_dir.rglob("*") if p.is_file()}
+
+
+@pytest.mark.parametrize("after", [2, 100])
+def test_live_terminal_stream_closes_when_all_events_consumed(after):
+    from datalab.api.events import event_stream
+    from datalab.services.event_bus import EventBus
+    bus = EventBus()
+    bus.emit("r", "run_started")
+    bus.emit("r", "run_completed")
+
+    async def collect():
+        return [frame async for frame in event_stream(bus, "r", after)]
+
+    assert asyncio.run(asyncio.wait_for(collect(), timeout=1)) == []
+    assert bus._listeners["r"] == []
+
+
+def test_live_stream_with_future_cursor_filters_events_but_closes_at_terminal():
+    from datalab.api.events import event_stream
+    from datalab.services.event_bus import EventBus
+    bus = EventBus()
+    bus.emit("r", "run_started")
+
+    async def scenario():
+        async def collect():
+            return [frame async for frame in event_stream(bus, "r", after=100)]
+        task = asyncio.create_task(collect())
+        await asyncio.sleep(0)  # let the consumer subscribe while the run is live
+        bus.emit("r", "agent_started", node_id="a")
+        bus.emit("r", "run_completed")
+        return await asyncio.wait_for(task, timeout=1)
+
+    assert asyncio.run(scenario()) == []
+    assert bus._listeners["r"] == []
+
+
+@pytest.mark.parametrize("suffix", ["", "/events", "/stream"])
+def test_history_invalid_unknown_and_corrupt_runs_are_404(client, settings, suffix):
+    rid = "run_20260101_000001_abcd"
+    assert client.get(f"/api/runs/{rid}{suffix}").status_code == 404
+    path = settings.workspace_dir / rid
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "run.json").write_text("{broken", encoding="utf-8")
+    assert client.get(f"/api/runs/{rid}{suffix}").status_code == 404
+    assert client.get(f"/api/runs/not-a-run{suffix}").status_code == 404
+    assert client.get("/api/runs").json() == []

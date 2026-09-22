@@ -133,6 +133,47 @@ describe("replay", () => {
   });
 });
 
+describe("stored run log (history reopen)", () => {
+  // A run persisted by a server that stopped mid-run: the backend appends synthetic failure events at read time.
+  const interruptedLog = () => {
+    const interrupted = { status: "error" as Status, message: "Interrupted", data: { interrupted: true } };
+    return [
+      ev("run_started", null, { status: "running", data: { mode: "real" } }),
+      started("alpha"),
+      started("alpha.boss"),
+      completed("alpha.boss"),
+      ev("handoff_started", "alpha.boss", { target: "alpha.worker" }),
+      started("alpha.worker"),
+      ev("agent_failed", "alpha.worker", interrupted),
+      ev("agent_failed", "alpha", interrupted),
+      ev("run_failed", null, { ...interrupted, message: "interrupted: the server stopped before the run finished" }),
+    ];
+  };
+
+  it("ends in error with no node left running when the log has an interrupted tail", () => {
+    const view = fold(interruptedLog());
+    expect(view.status).toBe("error");
+    expect(view.endedAt).not.toBeNull();
+    expect(Object.values(view.nodes).filter((n) => n.status === "running")).toEqual([]);
+    expect(view.nodes["alpha.worker"].status).toBe("error");
+    expect(view.nodes["alpha"].status).toBe("error");
+    expect(view.nodes["alpha.boss"].status).toBe("completed");
+  });
+
+  it("folds a whole stored log at once exactly like delivering it one event at a time", () => {
+    const events = interruptedLog();
+    let live = initialView(meta, "r");
+    for (const event of events) live = applyEvent(live, event);
+    expect(events.reduce(applyEvent, initialView(meta, "r"))).toEqual(live);
+  });
+
+  it("is a no-op to replay the same stored log a second time", () => {
+    const events = interruptedLog();
+    const once = fold(events);
+    expect(events.reduce(applyEvent, once)).toBe(once);
+  });
+});
+
 describe("formatDuration", () => {
   it("formats seconds and minutes", () => {
     expect(formatDuration("2026-01-01T00:00:00Z", "2026-01-01T00:00:12Z")).toBe("12s");

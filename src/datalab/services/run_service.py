@@ -5,25 +5,52 @@ from __future__ import annotations
 import threading
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 from datalab.config import Settings
 from datalab.graphs.organization import get_graph
-from datalab.schemas.event import EventType
+from datalab.schemas.event import EventType, ExecutionEvent
 from datalab.schemas.problem import DEMO_PROBLEM, ProblemConfig
 from datalab.schemas.run import RunInfo, RunMode
 from datalab.services.context import RunContext
 from datalab.services.event_bus import EventBus
+from datalab.services.run_store import RunStore
 from datalab.state import DataLabState, new_state
 
 
 class RunService:
     def __init__(self, settings: Settings, bus: EventBus | None = None) -> None:
         self.settings = settings
-        self.bus = bus or EventBus()
+        self.store = RunStore(settings.workspace_dir)
+        self.bus = bus if bus is not None else EventBus()
+        self.bus.bind_store(self.store)
         self._runs: dict[str, RunInfo] = {}
 
+    # Memory wins whenever this process knows the run; disk is only consulted on a miss (nothing is hydrated).
+
+    def in_memory(self, run_id: str) -> bool:
+        return run_id in self._runs
+
     def get(self, run_id: str) -> RunInfo | None:
-        return self._runs.get(run_id)
+        info = self._runs.get(run_id)
+        return info if info is not None else self.store.load_info(run_id)
+
+    def events(self, run_id: str) -> list[ExecutionEvent] | None:
+        if run_id in self._runs:
+            return self.bus.history(run_id)
+        loaded = self.store.load_run(run_id)
+        return None if loaded is None else loaded[1]
+
+    def list_runs(self, limit: int = 50) -> list[RunInfo]:
+        """Newest first (run ids sort by creation time): memory runs union disk runs."""
+        runs: list[RunInfo] = []
+        for run_id in sorted(set(self._runs) | set(self.store.run_ids()), reverse=True):
+            info = self.get(run_id)
+            if info is not None:  # unreadable run.json is skipped
+                runs.append(info)
+                if len(runs) == limit:
+                    break
+        return runs
 
     def create(self, mode: RunMode, problem: ProblemConfig | None = None) -> tuple[RunInfo, DataLabState]:
         problem = DEMO_PROBLEM if mode == "demo" else problem
@@ -33,9 +60,14 @@ class RunService:
         (self.settings.workspace_dir / run_id).mkdir(parents=True, exist_ok=True)
         dataset = "" if mode == "demo" else str(problem.resolved_dataset(self.settings.root))
         info = RunInfo(
-            run_id=run_id, mode=mode, project_name=problem.project_name, created_at=datetime.now(timezone.utc)
+            run_id=run_id,
+            mode=mode,
+            project_name=problem.project_name,
+            created_at=datetime.now(timezone.utc),
+            dataset=Path(dataset).name if dataset else None,
         )
         self._runs[run_id] = info
+        self.store.save_info(info)
         return info, new_state(run_id, problem, dataset, mode)
 
     def start(self, mode: RunMode, problem: ProblemConfig | None = None) -> RunInfo:
@@ -60,6 +92,7 @@ class RunService:
             settings=self.settings,
         )
         info.status = "running"
+        self.store.save_info(info)
         ctx.emit(EventType.run_started, f"Run started ({info.mode} workflow)", status="running", mode=info.mode)
         try:
             final = get_graph().invoke(state, config={"configurable": {"ctx": ctx}})
@@ -67,6 +100,7 @@ class RunService:
             info.status, info.error = "error", f"{type(exc).__name__}: {exc}"
             info.finished_at = datetime.now(timezone.utc)
             ctx.emit(EventType.run_failed, info.error, status="error")
+            self.store.save_info(info)  # after the terminal event
             return
         info.status = final["status"]
         info.current_phase = final["current_phase"]
@@ -77,3 +111,4 @@ class RunService:
             ctx.emit(EventType.run_rejected, "Run rejected by the review", status="rejected")
         else:
             ctx.emit(EventType.run_completed, "Run completed", status="completed")
+        self.store.save_info(info)  # after the terminal event

@@ -23,3 +23,4 @@ class RunInfo(BaseModel):
     error: str | None = None
     created_at: datetime
     finished_at: datetime | None = None
+    dataset: str | None = None  # file name of the dataset (real runs only)

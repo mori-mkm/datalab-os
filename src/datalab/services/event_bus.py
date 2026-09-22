@@ -9,6 +9,7 @@ from typing import Any
 
 from datalab.schemas.event import EventType, ExecutionEvent
 from datalab.schemas.run import Status
+from datalab.services.run_store import RunStore
 
 Listener = Callable[[ExecutionEvent], None]
 
@@ -16,11 +17,20 @@ Listener = Callable[[ExecutionEvent], None]
 class EventBus:
     """Thread-safe. Graphs run in worker threads; listeners must not block (e.g. `loop.call_soon_threadsafe`)."""
 
-    # ponytail: history is kept in memory for the process lifetime; persist to workspace/<run>/events.jsonl for run history (MVP).
-    def __init__(self) -> None:
+    def __init__(self, store: RunStore | None = None) -> None:
+        self._store = store  # optional: every event is persisted before any listener sees it
         self._lock = threading.Lock()
         self._events: dict[str, list[ExecutionEvent]] = {}
         self._listeners: dict[str, list[Listener]] = {}
+
+    def bind_store(self, store: RunStore) -> None:
+        """Bind persistence before a service starts using this bus; never switch an active bus."""
+        with self._lock:
+            if self._store is store:
+                return
+            if self._events or self._listeners:
+                raise ValueError("RunService requires an unused EventBus when binding its store")
+            self._store = store
 
     def emit(
         self,
@@ -53,6 +63,8 @@ class EventBus:
                 data=data,
             )
             history.append(event)
+            if self._store is not None:
+                self._store.append_event(event)  # never raises; runs under the lock so file order == seq
             for listener in list(self._listeners.get(run_id, [])):
                 listener(event)
         return event
@@ -64,8 +76,9 @@ class EventBus:
     def subscribe(self, run_id: str, listener: Listener, after: int = 0) -> Callable[[], None]:
         """Replay events with seq > `after`, then deliver live ones (no gap: both happen under the lock)."""
         with self._lock:
-            for event in self._events.get(run_id, [])[after:]:
-                listener(event)
+            for event in self._events.get(run_id, []):
+                if event.seq > after:
+                    listener(event)
             self._listeners.setdefault(run_id, []).append(listener)
 
         def unsubscribe() -> None:
