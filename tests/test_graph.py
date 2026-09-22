@@ -197,6 +197,56 @@ def test_real_workflow_traverses_children_and_attributes_artifacts(service, sett
     assert "roc_auc" in (run_dir / "report.md").read_text(encoding="utf-8")
 
 
+def test_real_workflow_on_a_small_synthetic_dataset_produces_data_driven_artifacts(service, settings, tmp_path):
+    """End-to-end proof on a small (~200-row) synthetic dataset: every stage produces a real, data-derived
+    artifact (not a placeholder), and the run reaches a terminal status."""
+    problem = load_problem(settings.configs_dir / "problem.small.yaml")
+    csv_path = problem.resolved_dataset(settings.root)
+    df = pd.read_csv(csv_path)
+    assert 100 <= len(df) <= 300  # the dataset this test is meant to exercise
+
+    info = service.run_sync("real", problem)
+    assert info.status == "completed" and info.review_verdict == "APPROVED"
+    events = service.bus.history(info.run_id)
+    started = [e.node_id for e in events if e.event_type == EventType.agent_started and e.node_id not in DEPARTMENTS]
+    assert started == EXECUTION_ORDER  # all 5 stages ran, in order: engineering, analytics, modeling, review, report
+
+    owners = {e.data["artifact"]: e.node_id for e in events if e.event_type == EventType.artifact_created}
+    assert set(owners) == {
+        "problem.yaml",
+        "data_profile.json",
+        "data_quality.json",
+        "eda.json",
+        "hypotheses.json",
+        "experiments.json",
+        "model_evaluation.json",
+        "review.json",
+        "report.md",
+    }
+    run_dir = settings.workspace_dir / info.run_id
+    assert all((run_dir / name).is_file() for name in owners)
+
+    # artifacts reflect the actual CSV content, not a canned/placeholder value
+    profile = json.loads((run_dir / "data_profile.json").read_text())
+    assert profile["rows"] == len(df) and profile["columns"] == df.shape[1]
+    assert profile["target"]["positive_rate"] == pytest.approx((df["churned"] == 1).mean())
+    experiment = json.loads((run_dir / "experiments.json").read_text())["experiments"][0]
+    original_auc = experiment["metrics"]["roc_auc"]
+    assert experiment["split"]["n_train"] + experiment["split"]["n_test"] == len(df)
+    assert "roc_auc" in (run_dir / "report.md").read_text(encoding="utf-8")
+
+    # perturb the dataset and re-run: a computed (not hardcoded) metric must change
+    flipped = df.copy()
+    flipped["churned"] = 1 - flipped["churned"]
+    perturbed_csv = tmp_path / "perturbed.csv"
+    flipped.to_csv(perturbed_csv, index=False)
+    perturbed_problem = problem.model_copy(update={"dataset_path": str(perturbed_csv)})
+    perturbed_info = service.run_sync("real", perturbed_problem)
+    perturbed_run_dir = settings.workspace_dir / perturbed_info.run_id
+    perturbed_experiment = json.loads((perturbed_run_dir / "experiments.json").read_text())["experiments"][0]
+    assert perturbed_experiment["metrics"]["roc_auc"] != original_auc
+
+
 def test_real_workflow_is_functionally_equivalent_to_the_flat_poc(service, settings):
     info = service.run_sync("real", load_problem(settings.configs_dir / "problem.example.yaml"))
     run_dir = settings.workspace_dir / info.run_id

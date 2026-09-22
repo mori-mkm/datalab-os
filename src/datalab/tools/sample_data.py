@@ -51,4 +51,5 @@ if __name__ == "__main__":
     out.mkdir(parents=True, exist_ok=True)
     make_sample().to_csv(out / "sample_churn.csv", index=False)
     make_sample(leak=True).to_csv(out / "sample_churn_leaky.csv", index=False)
-    print(f"wrote {out / 'sample_churn.csv'} and {out / 'sample_churn_leaky.csv'}")
+    make_sample(n=200, seed=99).to_csv(out / "sample_small.csv", index=False)  # small dataset for fast end-to-end checks
+    print(f"wrote {out / 'sample_churn.csv'}, {out / 'sample_churn_leaky.csv'} and {out / 'sample_small.csv'}")

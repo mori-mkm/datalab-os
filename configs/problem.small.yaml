@@ -1,0 +1,10 @@
+# Small synthetic dataset (~200 rows) for fast end-to-end validation of the full real workflow.
+project_name: churn-small-sample
+business_problem: Predict which customers will churn, on a small dataset, to validate the pipeline end-to-end.
+dataset_path: data/raw/sample_small.csv
+target: churned
+task_type: tabular_binary_classification
+id_columns: [customer_id]
+leakage_columns: []
+test_size: 0.25
+seed: 42

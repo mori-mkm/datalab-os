@@ -15,6 +15,7 @@ workspace/*
 data/raw/*
 !data/raw/.gitkeep
 !data/raw/sample_churn*.csv
+!data/raw/sample_small.csv
 
 # frontend
 node_modules/
