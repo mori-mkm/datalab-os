@@ -50,7 +50,7 @@ export function buildNodes(
   return nodes.sort((a, b) => Number(Boolean(a.parentId)) - Number(Boolean(b.parentId)));
 }
 
-export function buildEdges(meta: GraphMeta, view: RunView): Edge[] {
+export function buildEdges(meta: GraphMeta, view: RunView, selected: string | null = null): Edge[] {
   return meta.edges.map((e) => ({
     id: e.id,
     source: e.source,
@@ -61,6 +61,7 @@ export function buildEdges(meta: GraphMeta, view: RunView): Edge[] {
     targetHandle: "l",
     type: "execution",
     zIndex: 10,
+    selected: e.id === selected,
     data: { state: view.edges[e.id] ?? "idle", kind: e.kind },
     markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: "#8a94a6" },
   }));

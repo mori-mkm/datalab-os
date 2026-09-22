@@ -74,6 +74,9 @@ export interface RunInfo {
   /** File name of the dataset for real runs; null in demo. */
   dataset?: string | null;
   review_verdict?: string | null;
+  current_phase?: string | null;
+  /** Artifact name -> path, relative to the run dir. Only populated once the run has ended (see events.ts::artifactNames for the live-safe equivalent). */
+  artifacts?: Record<string, string>;
 }
 
 export interface Health {

@@ -111,3 +111,58 @@ export function formatDuration(from: string | null, to: string | number | null):
 
 export const formatTime = (iso: string | null): string =>
   iso ? new Date(iso).toLocaleTimeString([], { hour12: false }) : "—";
+
+/** Artifact names in creation order, derived from `artifact_created` events: identical for a live run and a
+ * replay (unlike `RunInfo.artifacts`, which the backend only fills in once the run has ended). */
+export function artifactNames(view: RunView): string[] {
+  const names: string[] = [];
+  for (const event of view.events) {
+    if (event.event_type !== "artifact_created") continue;
+    const name = event.data.artifact;
+    if (typeof name === "string" && !names.includes(name)) names.push(name);
+  }
+  return names;
+}
+
+/** The top-level unit (department/orchestrator/review/report) most recently touched by an event, or null before
+ * anything has run. Same idea as the backend's `current_phase`, but live-updating. */
+export function currentPhase(view: RunView): string | null {
+  for (let i = view.events.length - 1; i >= 0; i--) {
+    const department = view.events[i].department;
+    if (department) return department;
+  }
+  return null;
+}
+
+/** Start/end timestamps of the node that produced a given artifact (found by scanning `NodeView.artifacts`, not
+ * by name), or null if that artifact hasn't been created yet. No node id is hardcoded: whichever node reports
+ * the artifact is the one timed. */
+export function nodeTimingForArtifact(view: RunView, name: string): { startedAt: string | null; endedAt: string | null } | null {
+  const node = Object.values(view.nodes).find((n) => n.artifacts.includes(name));
+  return node ? { startedAt: node.startedAt, endedAt: node.endedAt } : null;
+}
+
+/** Tool/library names reported by `agent_completed.data.tools` for one node, in event order, deduped.
+ * Empty on older runs / agents that don't set `_tools` — the caller renders "not recorded", never an error. */
+export function toolsFor(view: RunView, nodeId: string): string[] {
+  const names: string[] = [];
+  for (const event of view.events) {
+    if (event.event_type !== "agent_completed" || event.node_id !== nodeId) continue;
+    const tools = event.data.tools;
+    if (!Array.isArray(tools)) continue;
+    for (const tool of tools) if (typeof tool === "string" && !names.includes(tool)) names.push(tool);
+  }
+  return names;
+}
+
+/** The verdict of the most recent completed review, or null before one has happened. */
+export function reviewVerdict(view: RunView): string | null {
+  for (let i = view.events.length - 1; i >= 0; i--) {
+    const event = view.events[i];
+    if (event.event_type === "review_completed") {
+      const verdict = event.data.verdict;
+      return typeof verdict === "string" ? verdict : null;
+    }
+  }
+  return null;
+}

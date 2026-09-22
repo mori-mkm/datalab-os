@@ -3,16 +3,20 @@ from __future__ import annotations
 import re
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ValidationError
 
 from datalab.api.events import event_stream, replay_stream
 from datalab.schemas.event import ExecutionEvent
 from datalab.schemas.problem import load_problem
 from datalab.schemas.run import RunInfo, RunMode
+from datalab.services.artifacts import _scrub
 from datalab.services.run_service import RunService
+from datalab.tools.profiling import load_dataset
 
 router = APIRouter(prefix="/api")
+
+_CONTENT_TYPES = {".json": "application/json", ".md": "text/markdown", ".yaml": "text/yaml", ".yml": "text/yaml"}
 
 
 class RunRequest(BaseModel):
@@ -84,3 +88,46 @@ async def stream_events(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.get("/runs/{run_id}/artifacts/{name}")
+def get_artifact(run_id: str, name: str, request: Request) -> Response:
+    """Raw content of one artifact belonging to that run. `name` is only ever used as a dict-key lookup into
+    `info.artifacts` (never joined raw onto a path) — that dict is server-written, so this cannot escape the
+    run directory."""
+    info = _known_run(request, run_id)
+    if name not in info.artifacts:
+        raise HTTPException(404, f"artifact '{name}' not found for run '{run_id}'")
+    settings = _service(request).settings
+    path = settings.workspace_dir / run_id / info.artifacts[name]
+    if not path.is_file():
+        raise HTTPException(404, f"artifact '{name}' not found for run '{run_id}'")
+    content_type = _CONTENT_TYPES.get(path.suffix.lower(), "text/plain")
+    return Response(content=path.read_bytes(), media_type=content_type)
+
+
+@router.get("/runs/{run_id}/dataset-preview")
+def get_dataset_preview(run_id: str, request: Request, limit: int = Query(15, ge=1, le=50)) -> dict:
+    """Bounded sample of the run's dataset, resolved only from that run's own `problem.yaml` artifact — never
+    from client input. `available=false` (never a 500) when there is no dataset to preview."""
+    info = _known_run(request, run_id)
+    settings = _service(request).settings
+    unavailable = {"available": False, "columns": [], "rows": [], "truncated": False}
+    problem_artifact = info.artifacts.get("problem.yaml")
+    if problem_artifact is None:
+        return unavailable
+    problem_path = settings.workspace_dir / run_id / problem_artifact
+    if not problem_path.is_file():
+        return unavailable
+    try:
+        problem = load_problem(problem_path)
+        df = load_dataset(problem.resolved_dataset(settings.root))
+    except Exception:
+        return unavailable
+    head = df.head(limit)
+    return {
+        "available": True,
+        "columns": list(head.columns),
+        "rows": _scrub(head.to_dict(orient="records")),
+        "truncated": len(df) > limit,
+    }

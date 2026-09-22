@@ -34,7 +34,7 @@ export function ExecutionGraph({ meta, view, now, selected, onSelect }: Props) {
     () => buildNodes(meta, view, now, computed, moved, selected),
     [meta, view, now, computed, moved, selected],
   );
-  const edges = useMemo(() => buildEdges(meta, view), [meta, view]);
+  const edges = useMemo(() => buildEdges(meta, view, selected), [meta, view, selected]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     for (const change of changes) {
@@ -53,9 +53,10 @@ export function ExecutionGraph({ meta, view, now, selected, onSelect }: Props) {
       edgeTypes={edgeTypes}
       onNodesChange={onNodesChange}
       onNodeClick={(_, node) => onSelect(node.id)}
+      onEdgeClick={(_, edge) => onSelect(edge.id)}
       onPaneClick={() => onSelect(null)}
       nodesConnectable={false}
-      edgesFocusable={false}
+      edgesFocusable
       deleteKeyCode={null}
       colorMode="system"
       fitView

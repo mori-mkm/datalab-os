@@ -247,6 +247,19 @@ def test_real_workflow_on_a_small_synthetic_dataset_produces_data_driven_artifac
     assert perturbed_experiment["metrics"]["roc_auc"] != original_auc
 
 
+def test_agent_completed_carries_tools_when_the_agent_sets_them_absent_otherwise(service, settings):
+    info = service.run_sync("real", load_problem(settings.configs_dir / "problem.example.yaml"))
+    completed = {
+        e.node_id: e.data.get("tools")
+        for e in service.bus.history(info.run_id)
+        if e.event_type == EventType.agent_completed
+    }
+    assert completed["data_engineering.data_profiler"] == ["pandas.read_csv", "profile_dataset"]
+    assert completed["modeling.model_evaluator"] == ["evaluate_model"]
+    assert completed["review"] == ["review_experiments"]
+    assert completed["head_ds"] is None  # no _tools set: absent, never an empty-list error
+
+
 def test_real_workflow_is_functionally_equivalent_to_the_flat_poc(service, settings):
     info = service.run_sync("real", load_problem(settings.configs_dir / "problem.example.yaml"))
     run_dir = settings.workspace_dir / info.run_id

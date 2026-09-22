@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { applyEvent, initialView } from "./events";
 import { completed, ev, meta, resetSeq, started } from "./fixtures";
-import { childrenOf, departmentSummary, inputsFor, isContainer, labelPath, upstreamOf } from "./hierarchy";
+import { childrenOf, completedAgentCount, departmentSummary, inputsFor, isContainer, labelPath, upstreamOf } from "./hierarchy";
 
 beforeEach(resetSeq);
 
@@ -60,5 +60,9 @@ describe("department parent data", () => {
     expect(inputsFor(meta, view, "beta")).toEqual(["a.json", "b.json"]); // all of alpha, none of beta's own
     expect(inputsFor(meta, view, "alpha.worker")).toEqual(["a.json"]);
     expect(inputsFor(meta, view, "ghost")).toEqual([]);
+  });
+
+  it("counts only agent-type nodes that reached completed, not departments or running agents", () => {
+    expect(completedAgentCount(meta, view)).toBe(1); // alpha.boss only: alpha.worker is still running
   });
 });

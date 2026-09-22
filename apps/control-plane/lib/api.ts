@@ -19,3 +19,20 @@ export const createRun = (mode: RunMode, config?: string) =>
     body: JSON.stringify({ mode, ...(config ? { config } : {}) }),
   });
 export const streamUrl = (runId: string) => `${API_URL}/api/runs/${runId}/stream`;
+
+// Raw artifact content (JSON pretty-print / Markdown render / plain text is the caller's decision, per
+// console-contract.md section 2 -- the endpoint itself does no schema translation).
+export async function getArtifact(runId: string, name: string): Promise<string> {
+  const response = await fetch(`${API_URL}/api/runs/${runId}/artifacts/${encodeURIComponent(name)}`);
+  if (!response.ok) throw new Error(`${name}: ${response.status} ${await response.text()}`);
+  return response.text();
+}
+
+export interface DatasetPreview {
+  available: boolean;
+  columns: string[];
+  rows: Record<string, unknown>[];
+  truncated: boolean;
+}
+export const getDatasetPreview = (runId: string, limit = 15) =>
+  request<DatasetPreview>(`/api/runs/${runId}/dataset-preview?limit=${limit}`);

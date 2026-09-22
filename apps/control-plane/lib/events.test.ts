@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { applyEvent, formatDuration, initialView } from "./events";
+import { applyEvent, artifactNames, currentPhase, formatDuration, initialView, nodeTimingForArtifact, reviewVerdict } from "./events";
 import { completed, ev, meta, resetSeq, started } from "./fixtures";
 import type { ExecutionEvent, Status } from "./types";
 
@@ -171,6 +171,56 @@ describe("stored run log (history reopen)", () => {
     const events = interruptedLog();
     const once = fold(events);
     expect(events.reduce(applyEvent, once)).toBe(once);
+  });
+});
+
+describe("artifactNames", () => {
+  it("lists artifact_created names in creation order, deduped, live-identical to a replay", () => {
+    const view = fold([
+      ev("artifact_created", "alpha.boss", { data: { artifact: "a.json" } }),
+      ev("artifact_created", "alpha.worker", { data: { artifact: "b.json" } }),
+      ev("artifact_created", "alpha.boss", { data: { artifact: "a.json" } }), // duplicate: kept once, at first position
+    ]);
+    expect(artifactNames(view)).toEqual(["a.json", "b.json"]);
+  });
+
+  it("is empty before any artifact exists", () => {
+    expect(artifactNames(initialView(meta, "r"))).toEqual([]);
+  });
+});
+
+describe("currentPhase", () => {
+  it("follows the department of the most recently touched event", () => {
+    const view = fold([started("alpha.boss"), started("beta.boss")]);
+    expect(currentPhase(view)).toBe("beta");
+  });
+
+  it("is null before anything has run", () => {
+    expect(currentPhase(initialView(meta, "r"))).toBeNull();
+  });
+});
+
+describe("reviewVerdict", () => {
+  it("reads the verdict off the most recent review_completed event", () => {
+    const view = fold([ev("review_completed", "audit", { status: "rejected", data: { verdict: "REJECTED" } })]);
+    expect(reviewVerdict(view)).toBe("REJECTED");
+  });
+
+  it("is null before a review has completed", () => {
+    expect(reviewVerdict(initialView(meta, "r"))).toBeNull();
+  });
+});
+
+describe("nodeTimingForArtifact", () => {
+  it("finds the start/end of whichever node produced the artifact, without knowing its id up front", () => {
+    const view = fold([started("beta.worker"), ev("artifact_created", "beta.worker", { data: { artifact: "experiments.json" } }), completed("beta.worker")]);
+    const timing = nodeTimingForArtifact(view, "experiments.json");
+    expect(timing?.startedAt).not.toBeNull();
+    expect(timing?.endedAt).not.toBeNull();
+  });
+
+  it("is null before the artifact exists", () => {
+    expect(nodeTimingForArtifact(initialView(meta, "r"), "experiments.json")).toBeNull();
   });
 });
 

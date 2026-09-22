@@ -1,4 +1,4 @@
-import { formatDuration, formatTime, type RunView } from "@/lib/events";
+import { formatDuration, formatTime, toolsFor, type RunView } from "@/lib/events";
 import { departmentSummary, inputsFor, isContainer, labelPath } from "@/lib/hierarchy";
 import type { GraphMeta } from "@/lib/types";
 import { StatusBadge } from "./StatusBadge";
@@ -28,6 +28,10 @@ export function AgentDetails({ nodeId, meta, view, now, onSelect, onClose }: Pro
   const artifacts = department ? department.artifacts : node.artifacts;
   const recent = (department ? department.recent : node.recent).filter((e) => e.event_type !== "handoff_completed");
   const duration = node.startedAt ? formatDuration(node.startedAt, node.endedAt ?? now) : "—";
+  // A department has no `agent_completed` of its own (only its agents do); show the union of what its agents used.
+  const tools = department
+    ? [...new Set(department.agents.flatMap((a) => toolsFor(view, a.id)))]
+    : toolsFor(view, nodeId);
 
   return (
     <aside className="details">
@@ -72,6 +76,8 @@ export function AgentDetails({ nodeId, meta, view, now, onSelect, onClose }: Pro
         <dd>{list(inputsFor(meta, view, nodeId))}</dd>
         <dt>Artifacts</dt>
         <dd>{list(artifacts)}</dd>
+        <dt>Tools used</dt>
+        <dd>{tools.length ? tools.join(", ") : "not recorded"}</dd>
         <dt>Started</dt>
         <dd>{formatTime(node.startedAt)}</dd>
         <dt>Duration</dt>

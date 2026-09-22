@@ -18,4 +18,12 @@ def run(ctx: RunContext, state: DataLabState) -> dict:
     ctx.status(f"Training baseline: {plan['model']} on {len(plan['features'])} features")
     result = train_baseline(df, problem, features=plan["features"])
     name = ctx.save_json("experiments.json", result)
-    return {"experiments": result["experiments"], "artifacts": {name: name}}
+    return {
+        "experiments": result["experiments"],
+        "artifacts": {name: name},
+        "_tools": [
+            "sklearn.model_selection.train_test_split",
+            "sklearn.pipeline.Pipeline",
+            "sklearn.linear_model.LogisticRegression",
+        ],
+    }

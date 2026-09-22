@@ -17,4 +17,8 @@ def run(ctx: RunContext, state: DataLabState) -> dict:
     ctx.status("Computing summaries and correlations")
     eda = summarize_features(df, problem.target, problem.positive_label, state["plans"]["analytics"]["features"])
     name = ctx.save_json("eda.json", eda)
-    return {"eda": eda, "artifacts": {name: name}}
+    return {
+        "eda": eda,
+        "artifacts": {name: name},
+        "_tools": ["pandas.read_csv", "summarize_features"],
+    }

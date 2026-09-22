@@ -16,4 +16,4 @@ def run(ctx: RunContext, state: DataLabState) -> dict:
         "hypotheses.json",
         {"hypotheses": hypotheses, "note": "Statistical associations only; no causal inference is made."},
     )
-    return {"hypotheses": hypotheses, "artifacts": {name: name}}
+    return {"hypotheses": hypotheses, "artifacts": {name: name}, "_tools": ["derive_hypotheses"]}

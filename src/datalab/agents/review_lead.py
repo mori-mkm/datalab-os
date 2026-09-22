@@ -25,4 +25,9 @@ def run(ctx: RunContext, state: DataLabState) -> dict:
         verdict=result.verdict,
     )
     name = ctx.save_json("review.json", review)
-    return {"review": review, "artifacts": {name: name}, "_node_status": "rejected" if rejected else "completed"}
+    return {
+        "review": review,
+        "artifacts": {name: name},
+        "_node_status": "rejected" if rejected else "completed",
+        "_tools": ["review_experiments"],
+    }

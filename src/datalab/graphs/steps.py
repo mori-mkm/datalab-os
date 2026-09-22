@@ -61,7 +61,13 @@ def make_step(spec: AgentSpec, node_id: str, topology: TopologyProvider) -> Step
             raise
 
         node_status = update.pop("_node_status", "completed")
-        ctx.emit(EventType.agent_completed, f"{me.label} {node_status}", status=node_status)
+        tools = update.pop("_tools", [])
+        ctx.emit(
+            EventType.agent_completed,
+            f"{me.label} {node_status}",
+            status=node_status,
+            **({"tools": tools} if tools else {}),
+        )
         if department and not topo.internal_succs(node_id):
             dept_ctx.emit(EventType.agent_completed, f"{department.label} completed", status="completed")
         for target in topo.succs(node_id):

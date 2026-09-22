@@ -17,4 +17,8 @@ def run(ctx: RunContext, state: DataLabState) -> dict:
     ctx.status(f"Profiling {len(df)} rows x {df.shape[1]} columns")
     profile = profile_dataset(df, problem.target, problem.positive_label)
     name = ctx.save_json("data_profile.json", profile)
-    return {"dataset_profile": profile, "artifacts": {name: name}}
+    return {
+        "dataset_profile": profile,
+        "artifacts": {name: name},
+        "_tools": ["pandas.read_csv", "profile_dataset"],
+    }

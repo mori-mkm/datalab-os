@@ -23,4 +23,5 @@ def run(ctx: RunContext, state: DataLabState) -> dict:
         "model_evaluation": evaluation,
         "selected_model": evaluation["selected_model"],
         "artifacts": {name: name},
+        "_tools": ["evaluate_model"],
     }

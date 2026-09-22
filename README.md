@@ -2,7 +2,7 @@
 
 # DataLab OS
 
-### A local-first, hierarchical AI organization for Data Science
+### A local-first, observable AI organization for Data Science
 
 **From raw data to analysis, machine learning, independent review and final reporting — with the entire workflow visible in real time.**
 
@@ -31,10 +31,11 @@ Instead of using a single AI assistant, the workflow is divided into departments
 - Independent Review
 - Reporting
 
-The organization is executed by **LangGraph** and can be observed through two complementary interfaces:
+The organization is executed by **LangGraph** and observed through:
 
-- **Control Plane** — detailed live execution viewer built with Next.js + React Flow
-- **Maestri Runtime Orchestra** — spatial terminal-based view of departments and runtime activity
+- **Control Plane** — Next.js + React Flow console observing the LangGraph hierarchy live: execution graph,
+  Agent Collaboration/Handoff Trace, data preview, artifacts, results, independent Review, and historical replay —
+  no paid APIs
 
 > **Status:** Functional PoC validated end-to-end for tabular binary classification.
 

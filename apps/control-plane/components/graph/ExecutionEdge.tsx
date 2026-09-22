@@ -5,5 +5,6 @@ import type { EdgeState } from "@/lib/events";
 export function ExecutionEdge(props: EdgeProps) {
   const [path] = getSmoothStepPath(props);
   const state = ((props.data as { state?: EdgeState } | undefined)?.state ?? "idle") as EdgeState;
-  return <BaseEdge id={props.id} path={path} markerEnd={props.markerEnd} className={`edge edge--${state}`} />;
+  const selected = props.selected ? " edge--selected" : "";
+  return <BaseEdge id={props.id} path={path} markerEnd={props.markerEnd} className={`edge edge--${state}${selected}`} />;
 }

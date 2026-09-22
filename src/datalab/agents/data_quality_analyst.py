@@ -14,4 +14,4 @@ def run(ctx: RunContext, state: DataLabState) -> dict:
     quality = assess_quality(state["dataset_profile"])
     ctx.status(f"{len(quality['issues'])} data-quality issue(s) found")
     name = ctx.save_json("data_quality.json", quality)
-    return {"data_quality": quality, "artifacts": {name: name}}
+    return {"data_quality": quality, "artifacts": {name: name}, "_tools": ["assess_quality"]}

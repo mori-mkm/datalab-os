@@ -190,6 +190,41 @@ def test_live_stream_with_future_cursor_filters_events_but_closes_at_terminal():
     assert bus._listeners["r"] == []
 
 
+def test_get_artifact_returns_raw_content_and_404s_on_unknown_run_or_name(client):
+    run_id = client.post("/api/runs", json={"mode": "real", "config": "problem.example"}).json()["run_id"]
+    info = _wait_finished(client, run_id)
+    assert info["status"] == "completed"
+
+    response = client.get(f"/api/runs/{run_id}/artifacts/review.json")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.json()["verdict"] == "APPROVED"
+
+    report = client.get(f"/api/runs/{run_id}/artifacts/report.md")
+    assert report.status_code == 200 and report.headers["content-type"].startswith("text/markdown")
+
+    assert client.get(f"/api/runs/nope/artifacts/review.json").status_code == 404
+    assert client.get(f"/api/runs/{run_id}/artifacts/no_such.json").status_code == 404
+    # path-traversal attempt: not a key in info.artifacts, so it 404s rather than escaping the run dir
+    assert client.get(f"/api/runs/{run_id}/artifacts/..%2Fproblem.example.yaml").status_code == 404
+
+
+def test_dataset_preview_real_run_has_rows_demo_run_is_unavailable(client):
+    real_id = client.post("/api/runs", json={"mode": "real", "config": "problem.example"}).json()["run_id"]
+    _wait_finished(client, real_id)
+    preview = client.get(f"/api/runs/{real_id}/dataset-preview?limit=5").json()
+    assert preview["available"] is True
+    assert preview["columns"] and len(preview["rows"]) == 5
+    assert "churned" in preview["columns"]
+
+    demo_id = client.post("/api/runs", json={"mode": "demo"}).json()["run_id"]
+    _wait_finished(client, demo_id)
+    demo_preview = client.get(f"/api/runs/{demo_id}/dataset-preview").json()
+    assert demo_preview == {"available": False, "columns": [], "rows": [], "truncated": False}
+
+    assert client.get("/api/runs/nope/dataset-preview").status_code == 404
+
+
 @pytest.mark.parametrize("suffix", ["", "/events", "/stream"])
 def test_history_invalid_unknown_and_corrupt_runs_are_404(client, settings, suffix):
     rid = "run_20260101_000001_abcd"

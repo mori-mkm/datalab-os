@@ -4,7 +4,16 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { AgentDetails } from "@/components/AgentDetails";
 import { ExecutionGraph } from "@/components/graph/ExecutionGraph";
+import { HandoffInspector } from "@/components/HandoffInspector";
+import { HandoffTimeline } from "@/components/HandoffTimeline";
 import { RunHeader } from "@/components/RunHeader";
+import { TabNav, type TabId } from "@/components/TabNav";
+import { OverviewTab } from "@/components/tabs/OverviewTab";
+import { DataTab } from "@/components/tabs/DataTab";
+import { ArtifactsTab } from "@/components/tabs/ArtifactsTab";
+import { ResultsTab } from "@/components/tabs/ResultsTab";
+import { ReviewTab } from "@/components/tabs/ReviewTab";
+import { ReportTab } from "@/components/tabs/ReportTab";
 import { API_URL, createRun, getGraph, getHealth, getRun, listRuns, streamUrl } from "@/lib/api";
 import { applyEvent, initialView, type RunView } from "@/lib/events";
 import type { ExecutionEvent, GraphMeta, Health, RunInfo, RunMode } from "@/lib/types";
@@ -27,6 +36,8 @@ export default function ControlPlane() {
   const [now, setNow] = useState(0);
   const [busy, setBusy] = useState(false);
   const [runs, setRuns] = useState<RunInfo[] | null>(null); // null: history unavailable, picker hidden
+  const [runInfo, setRunInfo] = useState<RunInfo | null>(null); // the static fields (project, dataset) for the open run
+  const [tab, setTab] = useState<TabId>("execution"); // Execution is today's unchanged default view
   const source = useRef<EventSource | null>(null);
   const opening = useRef(0); // latest open/start wins over a slower earlier getRun
   const mounted = useRef(false);
@@ -59,6 +70,7 @@ export default function ControlPlane() {
   const show = useCallback(
     (graph: GraphMeta, run: RunInfo | null) => {
       dispatch({ type: "reset", meta: graph, runId: run?.run_id ?? null, mode: run?.mode ?? null });
+      setRunInfo(run);
       if (run) attach(run.run_id);
     },
     [attach],
@@ -153,26 +165,46 @@ export default function ControlPlane() {
         onStart={start}
         onOpen={openRun}
       />
-      <main className="main">
-        <div className="canvas">
-          {meta ? (
-            <ExecutionGraph meta={meta} view={view} now={now} selected={selected} onSelect={setSelected} />
-          ) : (
-            <div className="muted center">{backendError ? "Graph unavailable" : "Loading graph…"}</div>
-          )}
-        </div>
-        {meta && selected && (
-          <AgentDetails
-            nodeId={selected}
-            meta={meta}
-            view={view}
-            now={now}
-            onSelect={setSelected}
-            onClose={() => setSelected(null)}
-          />
-        )}
-      </main>
-      {meta && <ActivityFeed events={view.events} meta={meta} />}
+      <TabNav active={tab} onSelect={setTab} />
+      {tab === "execution" && (
+        <>
+          <main className="main">
+            <div className="canvas">
+              {meta ? (
+                <ExecutionGraph meta={meta} view={view} now={now} selected={selected} onSelect={setSelected} />
+              ) : (
+                <div className="muted center">{backendError ? "Graph unavailable" : "Loading graph…"}</div>
+              )}
+            </div>
+            {meta && selected && (meta.edges.some((e) => e.id === selected) ? (
+              <HandoffInspector
+                edgeId={selected}
+                meta={meta}
+                view={view}
+                onSelect={setSelected}
+                onClose={() => setSelected(null)}
+              />
+            ) : (
+              <AgentDetails
+                nodeId={selected}
+                meta={meta}
+                view={view}
+                now={now}
+                onSelect={setSelected}
+                onClose={() => setSelected(null)}
+              />
+            ))}
+          </main>
+          {meta && <ActivityFeed events={view.events} meta={meta} />}
+        </>
+      )}
+      {tab === "overview" && meta && <OverviewTab key={view.runId ?? "none"} meta={meta} view={view} run={runInfo} now={now} />}
+      {tab === "data" && <DataTab key={view.runId ?? "none"} view={view} run={runInfo} />}
+      {tab === "collaboration" && meta && <HandoffTimeline key={view.runId ?? "none"} view={view} meta={meta} />}
+      {tab === "artifacts" && <ArtifactsTab key={view.runId ?? "none"} view={view} />}
+      {tab === "results" && <ResultsTab key={view.runId ?? "none"} view={view} run={runInfo} now={now} />}
+      {tab === "review" && <ReviewTab key={view.runId ?? "none"} view={view} />}
+      {tab === "report" && <ReportTab key={view.runId ?? "none"} view={view} />}
     </div>
   );
 }
